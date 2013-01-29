@@ -5,8 +5,7 @@ L.HexLayer = L.Class.extend({
         minZoom: 0,
         maxZoom: 18,
         padding: 100,
-        radius: 10,
-        classes: 9
+        radius: 10
     },
 
     initialize: function (data, options) {
@@ -24,7 +23,7 @@ L.HexLayer = L.Class.extend({
 
         // set up events
         map.on({
-            'viewreset': this._resetCallback,
+            'viewreset': this._reset,
             'moveend': this._update
         }, this);
 
@@ -36,7 +35,7 @@ L.HexLayer = L.Class.extend({
         this._container.parentNode.removeChild(this._container);
 
         map.off({
-            'viewreset': this._resetCallback,
+            'viewreset': this._reset,
             'moveend': this._update
         }, this);
 
@@ -52,10 +51,6 @@ L.HexLayer = L.Class.extend({
             this._container = d3.select(overlayPane)
                 .append('svg').attr('class', 'leaflet-layer leaflet-zoom-hide');
         }
-    },
-
-    _resetCallback: function (e) {
-        this._reset();
     },
 
     _reset: function () {
@@ -84,7 +79,7 @@ L.HexLayer = L.Class.extend({
             .style("margin-left", margin_left + "px").style("margin-top", margin_top + "px");
 
         if (!(zoom in this._levels)) {
-            this._levels[zoom] = this._container.append("g").attr("class", "YlOrRd zoom-" + zoom);
+            this._levels[zoom] = this._container.append("g").attr("class", "zoom-" + zoom);
             this._createHexagons(this._levels[zoom]);
             this._levels[zoom].attr("transform", "translate(" + -margin_left + "," + -margin_top + ")");
         }
@@ -107,28 +102,21 @@ L.HexLayer = L.Class.extend({
             bins = layout(data),
             hexagons = container.selectAll(".hexagon").data(bins);
 
-        var total_classes = this.options.classes,
-            max = d3.max(bins, function (d) { return d.length; }),
-            scale = d3.scale.quantize()
-                .domain([max, 0])
-                .range(d3.range(total_classes));
-
         // Create hexagon elements when data is added.
-        hexagons.enter()
-            .append("path")
-            .attr("class", "hexagon")
-            .attr("stroke", "#800026")
-            .attr("class", function (d) {
-                var num = ((total_classes - 1) - scale(d.length)),
-                    c = 'q' + num + "-" + total_classes;
-                return 'hexagon ' + c;
-            });
+        var path = hexagons.enter().append("path").attr("class", "hexagon");
+        this._applyStyle(path);
 
         // Position hexagon elements.
         hexagons.attr("d", function (d) {
             // Setting "M" ensures each hexagon is drawn at its correct location.
             return "M" + d.x + "," + d.y + layout.hexagon();
         });
+    },
+
+    _applyStyle: function (hexagons) {
+        if ('applyStyle' in this.options) {
+            this.options.applyStyle.call(this, hexagons);
+        }
     },
 
     _project: function (x) {
