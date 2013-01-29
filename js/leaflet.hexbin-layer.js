@@ -18,16 +18,14 @@ L.HexLayer = L.Class.extend({
     onAdd: function (map) {
         this._map = map;
 
-        // create a container div for tiles
+        // Create a container for svg.
         this._initContainer();
 
-        // set up events
+        // Set up events
         map.on({
-            'viewreset': this._reset,
             'moveend': this._update
         }, this);
 
-        this._reset();
         this._update();
     },
 
@@ -35,7 +33,6 @@ L.HexLayer = L.Class.extend({
         this._container.parentNode.removeChild(this._container);
 
         map.off({
-            'viewreset': this._reset,
             'moveend': this._update
         }, this);
 
@@ -43,18 +40,18 @@ L.HexLayer = L.Class.extend({
         this._map = null;
     },
 
-    _initContainer: function () {
-        var zoom = this._map.getZoom(),
-            overlayPane = this._map.getPanes().overlayPane;
+    addTo: function (map) {
+        map.addLayer(this);
+        return this;
+    },
 
+    _initContainer: function () {
+        var overlayPane = this._map.getPanes().overlayPane;
         if (!this._container || overlayPane.empty) {
+            // TODO: Add optional ID attribute in the case of multiple layers.
             this._container = d3.select(overlayPane)
                 .append('svg').attr('class', 'leaflet-layer leaflet-zoom-hide');
         }
-    },
-
-    _reset: function () {
-        this._initContainer();
     },
 
     _update: function () {

@@ -9,15 +9,23 @@
         attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
+    // Async call for data. Source URL is loaded from container element's
+    // 'data-source' attribute.
     d3.json(container.dataset.source, function(collection) {
-        var hex_layer = L.hexLayer(collection, {
-                applyStyle: hex_style
-            });
-
-        map.addLayer(hex_layer);
+        // When data arrives, create leaflet layer with custom style callback.
+        L.hexLayer(collection, {
+            applyStyle: hex_style
+        }).addTo(map);
     });
 
-    function hex_style (hexagons) {
+    /**
+     * Hexbin style callback.
+     *
+     * Determines a quantize scale (http://bl.ocks.org/4060606) based on the
+     * map's initial zoom level and data density and applies a colorbrewer
+     * (http://colorbrewer2.org/) colour scheme accordingly.
+     */
+    function hex_style(hexagons) {
         // Maintain a density scale relative to initial zoom level.
         if (!(max && scale)) {
             max = d3.max(hexagons.data(), function (d) { return d.length; });
