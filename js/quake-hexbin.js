@@ -22,8 +22,9 @@
      * Hexbin style callback.
      *
      * Determines a quantize scale (http://bl.ocks.org/4060606) based on the
-     * map's initial zoom level and data density and applies a colorbrewer
-     * (http://colorbrewer2.org/) colour scheme accordingly.
+     * map's initial data density (which is based on the initial zoom level)
+     * and applies a colorbrewer (http://colorbrewer2.org/) colour scheme
+     * accordingly.
      */
     function hex_style(hexagons) {
         // Maintain a density scale relative to initial zoom level.
