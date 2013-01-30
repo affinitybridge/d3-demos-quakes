@@ -1,72 +1,175 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.5/leaflet.css" />
-    <!--[if lte IE 8]>
-    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.5/leaflet.ie.css" />
-    <![endif]-->
-
     <script src="http://d3js.org/d3.v3.min.js"></script>
     <script src="http://d3js.org/d3.hexbin.v0.js"></script>
-    <script src="http://cdn.leafletjs.com/leaflet-0.5/leaflet-src.js"></script>
-
-    <script src="js/colorbrewer.js"></script>
-    <script src="js/leaflet.hexbin-layer.js"></script>
 
     <style type="text/css">
       html, body { margin: 0; padding: 0; height: 100%; }
-      #quake { min-height: 100%; }
-      .hexagon { opacity: 0.7 }
+      select { 
+        display: inline;
+      }
+      .axis text {
+        font: 10px sans-serif;
+      }
+      .axis path,
+      .axis line {
+        fill: none;
+        stroke: #000;
+        shape-rendering: crispEdges;
+      }
+      div#switcher { margin: 0em 2.5em 1em; }
+      p { margin-top: 0; }
     </style>
   </head>
   <body>
-    <div id='quake' data-source="data/quakes_christchurch_20100901-20101001_mag-gt3.json"></div>
+    <div id="quake" data-source="quakes_christchurch_20100901-20101001_mag-gt3.json"></div>
+    <div id="switcher">
+      <p>
+        Display
+        <select id="y-select" disabled>
+          <option value="magnitude">magnitude</option>
+          <option value="depth">depth</option>
+          <option value="phases">phases</option>
+        </select>
+        over time.
+      </p>
+    </div>
+
     <script type="text/javascript">
       (function () {
-          var max, scale,
-              classes = 9,
-              scheme = colorbrewer["YlOrRd"][classes],
-              container = L.DomUtil.get('quake'),
-              map = L.map(container).setView([-43.6, 172.3], 10);
+          var features, key, current, x, y,
+              labels = {
+                'magnitude': "Magnitude",
+                'depth': "Depth (km)",
+                'phases': "Phases"
+              },
+              views = {},
+              container = document.getElementById('quake');
 
-          L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
-              attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
-          }).addTo(map);
+          var rad = 16,
+              margin = {top: 12, right: 3, bottom: 38, left: 45},
+              width = 960 - margin.left - margin.right,
+              height = 450 - margin.top - margin.bottom;
 
-          // Async call for data. Source URL is loaded from container element's
-          // 'data-source' attribute.
+          var svg = d3.select(container).append("svg")
+                  .attr("width", width + margin.left + margin.right)
+                  .attr("height", height + margin.top + margin.bottom)
+                  .append("g")
+                  .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+          var y_select = d3.select("#y-select")
+                  .on("change", function (e) {
+                      var el = y_select.node();
+                      key = el.options[el.selectedIndex].value;
+                      update();
+                  });
+
+          svg.append("clipPath")
+              .attr("id", "clip")
+              .append("rect")
+              .attr("class", "mesh")
+              .attr("width", width - 1)
+              .attr("height", height - .25)
+              .attr("transform", "translate(1,0)");
+
+          var hexbin = d3.hexbin()
+                  .size([width, height])
+                  .radius(rad)
+                  .x(function (d) { return x(get_date(d)); });
+
           d3.json(container.dataset.source, function(collection) {
-              // When data arrives, create leaflet layer with custom style callback.
-              L.hexLayer(collection, {
-                  applyStyle: hex_style
-              }).addTo(map);
+              var el = y_select.node();
+              features = collection.features;
+              key = el.options[el.selectedIndex].value;
+
+              init();
+              update();
+
+              el.removeAttribute("disabled");
           });
 
-          /**
-           * Hexbin style callback.
-           *
-           * Determines a quantize scale (http://bl.ocks.org/4060606) based on the
-           * map's initial data density (which is based on the initial zoom level)
-           * and applies a colorbrewer (http://colorbrewer2.org/) colour scheme
-           * accordingly.
-           */
-          function hex_style(hexagons) {
-              // Maintain a density scale relative to initial zoom level.
-              if (!(max && scale)) {
-                  max = d3.max(hexagons.data(), function (d) { return d.length; });
-                  scale = d3.scale.quantize()
-                          .domain([0, max])
-                          .range(d3.range(classes));
-              }
+          function init() {
+              x = d3.time.scale()
+                      .domain(d3.extent(features, get_date))
+                      .range([0, width]);
+          }
 
-              hexagons
-                  .attr("stroke", scheme[classes - 1])
-                  .attr("fill", function (d) {
-                      return scheme[scale(d.length)];
-                  });
+          function update() {
+              if (!(key in views)) {
+                  views[key] = createView();
+              }
+              enableView(views[key]);
+          }
+
+          function createView() {
+              var view = svg.append("g")
+                      .attr("id", "view-" + key)
+                      .style("display", "none");
+
+              var y = d3.scale.linear()
+                      .domain(d3.extent(features, get_y))
+                      .range([height, 0]);
+
+              hexbin.y(function (d) { return y(get_y(d)); });
+
+              var bin = hexbin(features),
+                  color = d3.scale.linear()
+                      .domain(d3.extent(bin, function (d) { return d.length; }))
+                      .range([d3.lab("white").darker(.2), d3.lab("#A40000")])
+                      .interpolate(d3.interpolateLab);
+
+              view.append("g")
+                  .attr("class", "x axis")
+                  .attr("transform", "translate(0," + height + ")")
+                  .call(d3.svg.axis().scale(x).orient("bottom"))
+                  .append("text")
+                  .attr("class", "label")
+                  .attr("x", width)
+                  .attr("y", 35)
+                  .style("text-anchor", "end")
+                  .text("Earthquake origin time");
+
+              view.append("g")
+                  .attr("class", "y axis")
+                  .call(d3.svg.axis().scale(y).orient("left"))
+                  .append("text")
+                  .attr("class", "label")
+                  .attr("transform", "rotate(-90)")
+                  .attr("y", -40)
+                  .attr("dy", ".71em")
+                  .style("text-anchor", "end")
+                  .text(labels[key]);
+
+              view.append("g")
+                  .attr("clip-path", "url(#clip)")
+                  .selectAll(".hexagon")
+                  .data(bin)
+                  .enter().append("path")
+                  .attr("class", "hexagon")
+                  .attr("d", hexbin.hexagon())
+                  .attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; })
+                  .attr("fill", function (d) { return color(d.length); });
+
+              return view;
+          }
+
+          function enableView(view) {
+              if (current) {
+                  current.style("display", "none");
+              }
+              view.style("display", "inline");
+              current = view;
+          }
+
+          function get_date(d) {
+              return d3.time.format.iso.parse(d.properties.origintime);
+          }
+
+          function get_y(d) {
+              return d.properties[key];
           }
       }());
     </script>
   </body>
 </html>
-
