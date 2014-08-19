@@ -30,7 +30,7 @@ L.HexLayer = L.Class.extend({
     },
 
     onRemove: function (map) {
-        this._container.parentNode.removeChild(this._container);
+        this._container[0].parentNode.removeChild(this._container[0]);
 
         map.off({
             'moveend': this._update
